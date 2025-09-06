@@ -1,12 +1,13 @@
-name: CI
+name: roary/ci
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "**" ]
   pull_request:
 
 jobs:
-  node:
+  build:
+    name: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
