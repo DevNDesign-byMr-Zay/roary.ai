@@ -9976,31 +9976,7 @@ async function runRemoveFromUI(){
 
 
 
-<script id="roary_disable_v3_thoughtdock_v1">
-(()=>{ try{
-  const isAdv = ()=>{
-    try{
-      const m = String(localStorage.getItem("roary.model")||"").toLowerCase();
-      const mode = String(localStorage.getItem("roary.modelMode")||"").toLowerCase();
-      const deep = String(localStorage.getItem("roary.deepThoughtOn")||"") === "1";
-      return deep || mode==="advanced" || m==="roary-advanced" || m.includes("advanced") || m.includes("maverick") || m.includes("deepseek") || m.includes("r1");
-    }catch(e){ return false; }
-  };
 
-  if(typeof window.startThoughtSessionV3 === "function" && !window.__roaryV3ThoughtDisabled){
-    const _orig = window.startThoughtSessionV3;
-    window.startThoughtSessionV3 = function(){
-      try{
-        if(isAdv()){
-          return { phase: ()=>{}, finish: ()=>{} };
-        }
-      }catch(e){}
-      return _orig.apply(this, arguments);
-    };
-    window.__roaryV3ThoughtDisabled = true;
-  }
-}catch(e){} })();
-</script>
 
 
 
@@ -15980,7 +15956,14 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
       row.className = 'msg-actions-row ready';
       if(wrap.nextSibling) chat.insertBefore(row, wrap.nextSibling); else chat.appendChild(row);
     }
-    if(row.dataset.roaryOwner !== 'v2'){
+
+    const requiredActs = ['copy','share','like','dislike','regen','more'];
+    const hasCanonicalButtons = requiredActs.every((act)=>{
+      const btn = row.querySelector('.act-btn[data-act="'+act+'"]');
+      return !!(btn && btn.querySelector('svg'));
+    });
+
+    if(row.dataset.roaryOwner !== 'v2' || !hasCanonicalButtons){
       row.innerHTML = rowTemplate();
       row.dataset.roaryOwner = 'v2';
       row.classList.add('ready');
