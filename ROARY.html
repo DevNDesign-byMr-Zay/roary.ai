@@ -1199,66 +1199,21 @@ html body .thought-dock-z .td-card[data-state="0"] .td-title::before{
 }
 </style>
 
-<style id="roary_zdock_visibility_guard_v1">
-/* If anything tries to hide the Z-dock later, this wins. */
-.msg-wrap.assistant .thought-dock-z,
-.msg-wrap.assistant .thought-dock-z *{
-  visibility: visible !important;
+<style id="roary_zdock_motion_canonical_v1">
+/* Canonical Z-dock motion baseline: keep visibility stable without flattening cinematic transforms. */
+:root{
+  --roary-ease-cinematic: cubic-bezier(0.22, 1, 0.36, 1);
 }
 .msg-wrap.assistant .thought-dock-z{
-  display: block !important;
-  opacity: 1 !important;
-  transform: none !important;
-  filter: none !important;
+  display:block;
+  visibility:visible;
+  min-height:78px;
+  margin:10px 0 8px;
 }
-</style>
-<style id="roary_zdock_visibility_hardlock_v2">
-/* ===========================================================
-   Z-DOCK HARD VISIBILITY LOCK (v2)
-   Goal: make the dock visible even if other styles conflict.
-   Phase 1 stays FLAT: cards are layouted (no absolute stack).
-   Phase 2 can use depth stack (existing data-state transforms).
-   =========================================================== */
-
-html body .msg-wrap.assistant .msg.assistant > .thought-dock-z,
-html body .thought-dock-z{
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: none !important;
-  filter: none !important;
-  height: auto !important;
-  min-height: 78px !important;
-  margin: 10px 0 8px !important;
-  z-index: 99999 !important;
-  pointer-events: auto !important;
-}
-
-html body .thought-dock-z .td-stack{
-  position: relative !important;
-  height: auto !important;
-  min-height: 78px !important;
-}
-
-/* Phase 1: no z-axis and no slide-back — keep a single anchored thought */
-html body .thought-dock-z[data-phase="1"]{
-  perspective: none !important;
-}
-html body .thought-dock-z[data-phase="1"] .td-card{
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  transform: none !important;
-  filter: none !important;
-  opacity: 1 !important;
-}
-html body .thought-dock-z[data-phase="1"] .td-card[data-state]:not([data-state="0"]){
-  display: none !important;
-}
-
-/* Phase 2: allow depth behavior again (existing rules handle transforms) */
-html body .thought-dock-z[data-phase="2"]{
-  perspective: 800px !important;
+.msg-wrap.assistant .thought-dock-z .td-card,
+.msg-wrap.assistant .thought-dock-z .td-title,
+.msg-wrap.assistant .thought-dock-z .td-sub{
+  transition: opacity .42s var(--roary-ease-cinematic), transform .48s var(--roary-ease-cinematic), filter .42s ease;
 }
 </style>
 <style id="roaryCodeTokensV65">
@@ -8535,9 +8490,12 @@ function finalizeThoughts(){
 #rtSidePanel[data-tool="relight"] .rtp-mood-thumb,
 #rtSidePanel[data-tool="relight"] .rtp-mood-tile,
 #rtSidePanel[data-tool="relight"] .mood-tile{
-  transition: none !important;
-  transform: none !important;
-  will-change: auto !important;
+  transition: transform .26s var(--roary-ease-cinematic, cubic-bezier(0.22, 1, 0.36, 1)),
+              filter .26s ease,
+              box-shadow .26s ease,
+              opacity .22s ease !important;
+  transform: translateZ(0);
+  will-change: transform, filter, box-shadow;
   cursor: pointer;
   pointer-events: auto !important;
   touch-action: manipulation;
@@ -8545,9 +8503,9 @@ function finalizeThoughts(){
 #rtSidePanel[data-tool="relight"] .rtp-mood-thumb:hover,
 #rtSidePanel[data-tool="relight"] .rtp-mood-tile:hover,
 #rtSidePanel[data-tool="relight"] .mood-tile:hover{
-  transform: none !important;
-  filter: none !important;
-  box-shadow: none !important;
+  transform: translateY(-1px) scale(1.01);
+  filter: brightness(1.03);
+  box-shadow: 0 8px 22px rgba(0,0,0,.28);
 }
 /* Ensure the orb scrim never blocks relight panel controls */
 body.rt-panel-open[data-rt-orbtool="relight"] #rtOrbToolScrim{
@@ -13411,95 +13369,6 @@ async function runRemoveFromUI(){
       }
     }
   </script>
-<style id="roary_zdock_visibility_guard_v1">
-/* If anything tries to hide the Z-dock later, this wins. */
-.msg-wrap.assistant .thought-dock-z,
-.msg-wrap.assistant .thought-dock-z *{
-  visibility: visible !important;
-}
-.msg-wrap.assistant .thought-dock-z{
-  display: block !important;
-  opacity: 1 !important;
-  transform: none !important;
-  filter: none !important;
-}
-</style>
-<style id="roary_zdock_visibility_hardlock_v2">
-/* ===========================================================
-   Z-DOCK HARD VISIBILITY LOCK (v2)
-   Goal: make the dock visible even if other styles conflict.
-   Phase 1 stays FLAT: cards are layouted (no absolute stack).
-   Phase 2 can use depth stack (existing data-state transforms).
-   =========================================================== */
-
-html body .msg-wrap.assistant .msg.assistant > .thought-dock-z,
-html body .thought-dock-z{
-  display: block !important;
-  opacity: 1 !important;
-  visibility: visible !important;
-  transform: none !important;
-  filter: none !important;
-  height: auto !important;
-  min-height: 78px !important;
-  margin: 10px 0 8px !important;
-  z-index: 99999 !important;
-  pointer-events: auto !important;
-}
-
-html body .thought-dock-z .td-stack{
-  position: relative !important;
-  height: auto !important;
-  min-height: 78px !important;
-}
-
-/* Phase 1: no z-axis and no slide-back — keep a single anchored thought */
-html body .thought-dock-z[data-phase="1"]{
-  perspective: none !important;
-}
-html body .thought-dock-z[data-phase="1"] .td-card{
-  position: relative !important;
-  top: auto !important;
-  left: auto !important;
-  transform: none !important;
-  filter: none !important;
-  opacity: 1 !important;
-}
-html body .thought-dock-z[data-phase="1"] .td-card[data-state]:not([data-state="0"]){
-  display: none !important;
-}
-
-/* Phase 2: allow depth behavior again (existing rules handle transforms) */
-html body .thought-dock-z[data-phase="2"]{
-  perspective: 800px !important;
-}
-</style>
-<style id="roaryCodeTokensV65">
-  :root{
-    --rc_bg: #0b0b10;
-    --rc_fg: rgba(255,255,255,0.90);
-    --rc_cmt: #6a9955;
-    --rc_kw:  #60a5fa;
-    --rc_str: #f472b6;
-    --rc_num: #34d399;
-    --rc_fn:  #facc15;
-    --rc_typ: #22d3ee;
-    --rc_tag: #a78bfa;
-    --rc_attr:#f97316;
-    --rc_op:  rgba(255,255,255,0.78);
-    --rc_pun: rgba(255,255,255,0.58);
-  }
-  /* ensure tokens win in any stacking context */
-  .roary-codeframe .tok-cmt{ color: var(--rc_cmt) !important; font-style: italic !important; }
-  .roary-codeframe .tok-kw{  color: var(--rc_kw)  !important; }
-  .roary-codeframe .tok-str{ color: var(--rc_str) !important; }
-  .roary-codeframe .tok-num{ color: var(--rc_num) !important; }
-  .roary-codeframe .tok-fn{  color: var(--rc_fn)  !important; }
-  .roary-codeframe .tok-typ{ color: var(--rc_typ) !important; }
-  .roary-codeframe .tok-tag{ color: var(--rc_tag) !important; }
-  .roary-codeframe .tok-attr{color: var(--rc_attr)!important; }
-  .roary-codeframe .tok-op{  color: var(--rc_op)  !important; }
-  .roary-codeframe .tok-pun{ color: var(--rc_pun) !important; }
-</style>
 </head>
 <body>
   <div id="intro-overlay">
@@ -18568,45 +18437,6 @@ ${clean(nextTitle)}`);
 })();
 </script>
 
-<style id="roary_sourcespill_v87_css">
-/* Minimal Sources pill aligned with action icons */
-.roary-src-pill{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:4px 8px; border-radius:999px;
-  border:1px solid rgba(255,255,255,.14);
-  background:rgba(0,0,0,.22);
-  color:rgba(255,255,255,.82);
-  font-size:11px; letter-spacing:.08em; text-transform:uppercase;
-  cursor:pointer; user-select:none;
-}
-.roary-src-pill:hover{ background:rgba(255,255,255,.06); }
-.roary-src-pill[aria-disabled="true"]{ opacity:.55; cursor:default; }
-.roary-src-dd{
-  position:absolute; right:0; bottom:calc(100% + 8px);
-  min-width:260px; max-width:360px;
-  background:rgba(10,10,14,.92);
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:12px;
-  box-shadow:0 18px 40px rgba(0,0,0,.55);
-  overflow:hidden;
-  z-index:999999;
-}
-.roary-src-dd a{
-  display:block; padding:10px 12px;
-  color:rgba(255,255,255,.86); text-decoration:none;
-  border-bottom:1px solid rgba(255,255,255,.07);
-  font-size:12px;
-}
-.roary-src-dd a:last-child{ border-bottom:none; }
-.roary-src-dd a:hover{ background:rgba(255,255,255,.06); }
-.roary-src-dd .roary-src-dd-hdr{
-  padding:8px 12px;
-  font-size:11px; color:rgba(255,255,255,.55);
-  letter-spacing:.08em; text-transform:uppercase;
-  background:rgba(255,255,255,.03);
-  border-bottom:1px solid rgba(255,255,255,.07);
-}
-</style>
 
 
 
