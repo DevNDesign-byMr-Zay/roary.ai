@@ -19303,14 +19303,16 @@ ${clean(nextTitle)}`);
 
     const dock = tempAssistant.querySelector('.thought-dock-z');
     const dockTxt = String(dock && (dock.innerText || dock.textContent) || '').trim();
-    const dockComplete = !dock || dock.getAttribute('data-complete') === '1' || dock.getAttribute('data-phase') === '2' || /process complete/i.test(dockTxt);
+    const hasDock = !!dock;
+    const dockComplete = hasDock && (dock.getAttribute('data-complete') === '1' || dock.getAttribute('data-phase') === '2' || /process complete/i.test(dockTxt));
     if(txt !== regenState.lastText){
       regenState.lastText = txt;
       regenState.lastChangeAt = Date.now();
       return false;
     }
     const stableFor = Date.now() - Number(regenState.lastChangeAt || regenState.startedAt || Date.now());
-    if(!dockComplete && stableFor < 900) return false;
+    if(stableFor < 900) return false;
+    if(hasDock && !dockComplete) return false;
 
     regenState.done = true;
     if(regenPoll){ clearInterval(regenPoll); regenPoll = null; }
