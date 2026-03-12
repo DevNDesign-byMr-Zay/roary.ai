@@ -11319,7 +11319,7 @@ function actionTimeSec(nodeId, idx) {
     let targetScroll = 0;
     const introOverlay = document.getElementById('intro-overlay');
 
-    const WHEEL_GAIN = 0.00019;
+    const WHEEL_GAIN = 0.00013;
     const STOP_BREAK_MS = 0;
     let stopGate = null; // { id, dir, awaitingCenter, unlockAt }
 
@@ -11642,7 +11642,7 @@ const crossed = firstCrossedNode(from, proposed);
         from: scroll,
         to,
         startMs: now,
-        durMs: Math.max(450, opts.durMs || 1100),
+        durMs: Math.max(760, opts.durMs || 1450),
         pendingAction: opts.pendingAction || null,
         stopAtNodeId: (typeof opts.stopAtNodeId === 'number') ? opts.stopAtNodeId : null
       };
@@ -13232,7 +13232,7 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
         snapTarget = s * s;
       }
 
-      const snapFollow = snapTarget > snapMix ? 0.18 : 0.12;
+      const snapFollow = snapTarget > snapMix ? 0.13 : 0.09;
       snapMix += (snapTarget - snapMix) * snapFollow;
 
       if (introFree) {
@@ -13371,25 +13371,20 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
         }
       }
 
-      // Check for completion (End of timeline)
-      if (scroll > 0.985 && !window.__roaryLoomExiting) {
+      // Deterministic completion handoff
+      const finalNode = nodes && nodes.length ? nodes[nodes.length - 1] : null;
+      const onFinal = !!(finalNode && activeNode && activeNode.id === finalNode.id && cardCentered);
+      if (onFinal && !window.__roaryLoomExiting) {
           window.__roaryLoomExiting = true;
           const co = document.getElementById('complete-overlay');
-          if (co) {
-              co.classList.add('active');
+          if (co) co.classList.add('active');
+          setTimeout(() => {
+              try{ if (window.parent && window.parent.closeThoughtWeb) window.parent.closeThoughtWeb(); }catch(_){ }
               setTimeout(() => {
-                  if (window.parent && window.parent.closeThoughtWeb) {
-                      window.parent.closeThoughtWeb();
-                      // Reset states seamlessly so it's ready next time it opens
-                      setTimeout(() => {
-                          co.classList.remove('active');
-                          window.__roaryLoomExiting = false;
-                          targetScroll = 0;
-                          scroll = 0;
-                      }, 1000);
-                  }
-              }, 2500); // Wait 2.5 seconds showing "COMPLETE" before closing
-          }
+                  if (co) co.classList.remove('active');
+                  window.__roaryLoomExiting = false;
+              }, 360);
+          }, 1100);
       }
 
       // Timeline clock (scroll-synced)
@@ -13535,16 +13530,12 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
   if (window.__roaryLoomMasterV26) return;
   window.__roaryLoomMasterV26 = true;
 
-  const log = (...a)=>{ try{ console.log("[ROARY][LoomMasterV26]", ...a); }catch(e){} };
-
   const $ = (id)=>document.getElementById(id);
-
   const isInteractive = (el) => {
     if(!el) return false;
     const t = (el.tagName || "").toLowerCase();
     return t === "a" || t === "button" || t === "input" || t === "textarea" || t === "select" || el.isContentEditable;
   };
-
   const getDockFromEvent = (e) => {
     const t = e && e.target;
     if(!t || !t.closest) return null;
@@ -13556,35 +13547,23 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     const frame   = $("tw3dFrame");
     const tpl     = $("roaryTemporalLoomSrcdoc");
     const closeBtn= $("tw3dClose");
-
-    if(!overlay || !frame || !tpl){
-      console.warn("[ROARY][LoomMasterV26] Missing deps:", {overlay:!!overlay, frame:!!frame, tpl:!!tpl});
-      return;
-    }
+    if(!overlay || !frame || !tpl) return;
 
     let loaded = false;
-
     const ensureLoaded = () => {
       if (loaded) return true;
       loaded = true;
-      try{
-        // Load the Loom srcdoc exactly once per page lifetime.
-        frame.srcdoc = tpl.innerHTML;
-        return true;
-      }catch(e){
-        loaded = false;
-        console.error("[ROARY][LoomMasterV26] srcdoc load failed:", e);
-        return false;
-      }
+      try{ frame.srcdoc = tpl.innerHTML; return true; }
+      catch(e){ loaded = false; return false; }
     };
 
-    const open = () => {
+    const open = (dockEl) => {
+      if (dockEl) window.__roaryActiveLoomDock = dockEl;
       ensureLoaded();
       overlay.classList.add("open");
       overlay.setAttribute("aria-hidden","false");
       document.body.style.overflow = "hidden";
-      // Push latest dock state into the Loom immediately on open.
-      try{ if (typeof window.__roarySyncLoomNowV26 === "function") window.__roarySyncLoomNowV26(); }catch(e){}
+      try{ if (typeof window.__roarySyncLoomNowV26 === "function") window.__roarySyncLoomNowV26(window.__roaryActiveLoomDock || dockEl || null); }catch(e){}
       setTimeout(()=>{ try{ frame.contentWindow && frame.contentWindow.focus(); }catch(e){} }, 250);
     };
 
@@ -13594,7 +13573,6 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
       document.body.style.overflow = "";
     };
 
-    // Expose stable API
     window.openThoughtWeb = open;
     window.closeThoughtWeb = close;
 
@@ -13602,27 +13580,18 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     window.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && overlay.classList.contains("open")){ e.preventDefault(); close(); } }, true);
 
     const intercept = (e) => {
-      // Only open if the click originates from the dock.
       const dockEl = getDockFromEvent(e);
       if(!dockEl) return;
-
-      // Don't steal clicks from inputs/links/buttons inside the dock.
       const t = e && e.target;
       if(isInteractive(t) || (t && t.closest && t.closest("a,button,input,textarea,select"))) return;
-
-      // Avoid re-opening while already open.
       if(overlay.classList.contains("open")) return;
-
       e.preventDefault();
       e.stopPropagation();
       if(typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
-      open();
+      open(dockEl);
     };
 
-    // Capture so we can open reliably even if other handlers exist.
     window.addEventListener("pointerdown", intercept, true);
-
-    log("Active.");
   };
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init, { once:true });
@@ -13636,8 +13605,6 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
   if (window.__roaryLoomTransportV26) return;
   window.__roaryLoomTransportV26 = true;
 
-  const log = (...a)=>{ try{ console.log("[ROARY][LoomTxV26]", ...a); }catch(e){} };
-
   const queue = [];
   let seq = 0;
   let loadHooked = false;
@@ -13650,92 +13617,49 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     const frame = getFrame();
     const tpl = getTpl();
     if (!frame || !tpl) return false;
-
-    // If something cleared srcdoc, restore it.
     if (!frame.srcdoc || frame.srcdoc.length < 50) {
       try { frame.srcdoc = tpl.innerHTML; } catch(e) {}
     }
-
     if (!loadHooked) {
       loadHooked = true;
-      frame.addEventListener("load", () => {
-        frameLoaded = true;
-        flush();
-      }, true);
+      frame.addEventListener("load", () => { frameLoaded = true; flush(); }, true);
     }
-
     return true;
   };
 
   const flush = () => {
-    const frame = getFrame();
-    const cw = frame && frame.contentWindow;
+    const cw = getFrame()?.contentWindow;
     if (!cw) return;
     while (queue.length) {
       try { cw.postMessage(queue.shift(), "*"); } catch(e) { break; }
     }
   };
 
-  const looksBucketized = (ms) => {
-    try{
-      if (!Array.isArray(ms)) return false;
-      if (ms.length > 0 && ms.length <= 5) {
-        const joined = ms.map(x => String(x?.title || x?.t || "")).join(" | ").toLowerCase();
-        return /prompt intake|context retrieval|reasoning pass|drafting response|final polish|awaiting data/.test(joined);
-      }
-      return false;
-    }catch(e){ return false; }
-  };
-
-  const rebuildIfNeeded = (ms) => {
-    try{
-      if (!looksBucketized(ms)) return ms;
-      const dock = window.__roaryDockLatest || document.querySelector(".thought-dock-z") || document.querySelector(".thought-dock");
-      if (typeof window.__roaryBuildMilestonesV26 === "function") {
-        const rebuilt = window.__roaryBuildMilestonesV26(dock);
-        if (Array.isArray(rebuilt) && rebuilt.length) return rebuilt;
-      }
-      return ms;
-    }catch(e){ return ms; }
-  };
-
-  // Public API: this is what all Dock emitters call.
   window.syncLoomData = (milestones) => {
-    const ms0 = Array.isArray(milestones) ? milestones : [];
-    const ms = rebuildIfNeeded(ms0);
-
     const payload = {
       type: "roary:loomSync",
-      milestones: ms,
+      milestones: Array.isArray(milestones) ? milestones.slice(0, 120) : [],
       sentAt: Date.now(),
       seq: ++seq,
       v: "v26"
     };
-
     try{
       if (!ensureFrameLoaded()) { queue.push(payload); return; }
-      const frame = getFrame();
-      const cw = frame && frame.contentWindow;
+      const cw = getFrame()?.contentWindow;
       if (!cw || !frameLoaded) { queue.push(payload); return; }
       cw.postMessage(payload, "*");
-    }catch(e){
-      try{ queue.push(payload); }catch(_){}
-    }
+    }catch(e){ try{ queue.push(payload); }catch(_){} }
   };
 
-  // Optional: allow parent to signal COMPLETE to iframe (iframe owns outro).
   window.__roaryLoomCompleteV26 = () => {
     const payload = { type: "roary:loomComplete", sentAt: Date.now(), v:"v26" };
     try{
       if (!ensureFrameLoaded()) { queue.push(payload); return; }
-      const frame = getFrame();
-      const cw = frame && frame.contentWindow;
+      const cw = getFrame()?.contentWindow;
       if (!cw || !frameLoaded) { queue.push(payload); return; }
       cw.postMessage(payload, "*");
-    }catch(e){ try{ queue.push(payload); }catch(_ ){} }
+    }catch(e){ try{ queue.push(payload); }catch(_){} }
   };
-
-  log("Ready.");
 })();
 </script>
 
@@ -13745,416 +13669,150 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
   if (window.__roaryLoomSyncV26) return;
   window.__roaryLoomSyncV26 = true;
 
-  const log = (...a)=>{ try{ console.log("[ROARY][LoomSyncV26]", ...a); }catch(e){} };
+  const clean = (v) => String(v ?? "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 
-  // Prefer the Z‑Dock (ThoughtDockZ) as the single source of truth when it exists.
-  // This prevents the legacy v3 dock (window.sa) from overwriting the richer multi‑node stream.
   const resolveDock = (dock) => {
-    try{
+    try {
+      if (dock && (Array.isArray(dock.__roaryAllEntries) || Array.isArray(dock.allEntries) || Array.isArray(dock.thoughts))) return dock;
+      const active = window.__roaryActiveLoomDock;
+      if (active && (Array.isArray(active.__roaryAllEntries) || Array.isArray(active.allEntries) || Array.isArray(active.thoughts))) return active;
       const zd = window.__roaryDockZ;
-      if (zd && (Array.isArray(zd.__roaryAllEntries) || Array.isArray(zd.thoughts) || Array.isArray(zd.allEntries))) return zd;
-    }catch(e){}
-    try{
-      const el = document.querySelector(".thought-dock-z");
-      if (el && (Array.isArray(el.__roaryAllEntries) || Array.isArray(el.thoughts) || Array.isArray(el.allEntries))) return el;
-    }catch(e){}
-    return dock;
-  };
-
-  const clean = (s) => {
-    try{
-      return String(s ?? "")
-        .replace(/\r/g,"")
-        .replace(/[ \t]+\n/g,"\n")
-        .replace(/\n{3,}/g,"\n\n")
-        .trim();
-    }catch(e){ return ""; }
-  };
-
-  const clipSoft = (s, max=32000) => {
-    s = clean(s);
-    if (!s) return "";
-    return s.length > max ? (s.slice(0, max-1) + "…") : s;
-  };
-
-  const getPrimaryType = (title, desc) => {
-    const s = (String(title||"") + " " + String(desc||"")).toLowerCase();
-    if (/\b(search|web|lookup|source|fetch|query|browse)\b/.test(s)) return "search";
-    if (/\b(file|pdf|attachment|ocr|scan|read|parse|extract)\b/.test(s)) return "file";
-    if (/\b(calc|math|compute|equation|sum|total)\b/.test(s)) return "calc";
-    if (/\b(code|script|patch|refactor|build|debug|fix|function)\b/.test(s)) return "code";
-    if (/\b(check|verify|audit|validate|confirm|test)\b/.test(s)) return "check";
-    if (/\b(analy|reason|logic|diagnos|trace|map)\b/.test(s)) return "logic";
-    return "process";
-  };
-
-  const normalizeThought = (th) => {
-    const t = clean(th?.t ?? th?.title ?? th?.name ?? "");
-    const d = clean(th?.d ?? th?.desc ?? th?.description ?? th?.sub ?? "");
-    const subArr =
-      Array.isArray(th?.sub) ? th.sub :
-      Array.isArray(th?.subthoughts) ? th.subthoughts :
-      Array.isArray(th?.steps) ? th.steps :
-      Array.isArray(th?.bullets) ? th.bullets :
-      null;
-
-    const histArr = Array.isArray(th?.subHistory) ? th.subHistory : null;
-    const actionsArr = Array.isArray(th?.actions) ? th.actions : null;
-    const sec = th?.sec;
-
-    return { t, d, subArr, histArr, actionsArr, sec };
+      if (zd && (Array.isArray(zd.__roaryAllEntries) || Array.isArray(zd.allEntries) || Array.isArray(zd.thoughts))) return zd;
+      return document.querySelector('.thought-dock-z') || document.querySelector('.thought-dock') || dock || null;
+    } catch(_) {
+      return dock || null;
+    }
   };
 
   const extractThoughts = (dock) => {
-    // Primary: dock.thoughts (structured)
-    if (dock && Array.isArray(dock.thoughts) && dock.thoughts.length) {
-      return dock.thoughts.map(normalizeThought).filter(x => x.t || x.d || (x.subArr && x.subArr.length));
-    }
-    // Secondary: z-dock allEntries style
-    if (dock && Array.isArray(dock.allEntries) && dock.allEntries.length) {
-      return dock.allEntries.map((e)=>normalizeThought({
-        title: e.title,
-        d: e.sub || e.description || "",
-        actions: e.actions || [],
-        sec: e.sec
-      })).filter(x => x.t || x.d);
-    }
-    // Tertiary: DOM scrape (best-effort)
-    try{
-      const root = dock?.el || dock?.rootEl || dock?.container || document.querySelector(".thought-dock-z") || document.querySelector(".thought-dock");
-      if (!root) return [];
-      const cards = Array.from(root.querySelectorAll(".td-card, .thought-card, .roary-thought-card"));
-      const out = [];
-      for (const c of cards) {
-        const h = c.querySelector("h3, .td-title, .title");
-        const title = clean(h ? h.innerText : "");
-        let body = clean(c.innerText || "");
-        if (title && body.startsWith(title)) body = clean(body.slice(title.length));
-        out.push({ t: title, d: body });
-      }
-      return out.filter(x => x.t || x.d).map(normalizeThought);
-    }catch(e){ return []; }
+    if (dock && Array.isArray(dock.thoughts) && dock.thoughts.length) return dock.thoughts;
+    if (dock && Array.isArray(dock.__roaryAllEntries) && dock.__roaryAllEntries.length) return dock.__roaryAllEntries;
+    if (dock && Array.isArray(dock.allEntries) && dock.allEntries.length) return dock.allEntries;
+    return [];
   };
 
-  const buildNarrative = (t, d, subArr, histArr, nextTitle, isLast) => {
-    const parts = [];
+  const normalizeThought = (th, i) => {
+    const title = clean(th?.t ?? th?.title ?? th?.name ?? `Thought ${i+1}`);
+    const desc = clean(th?.d ?? th?.desc ?? th?.description ?? th?.sub ?? '');
+    const subs = Array.isArray(th?.sub) ? th.sub : Array.isArray(th?.subthoughts) ? th.subthoughts : Array.isArray(th?.steps) ? th.steps : [];
+    const hist = Array.isArray(th?.subHistory) ? th.subHistory : [];
+    const prose = [desc, ...subs.map(clean), ...hist.map(clean)].filter(Boolean).join('\n\n');
 
-    const title = clean(t || "");
-    const signal = clean(d || "");
-    const primary = getPrimaryType(title, signal);
+    const codeBlocks = [];
+    const rawCodes = [];
+    if (Array.isArray(th?.codeBlocks)) rawCodes.push(...th.codeBlocks);
+    if (Array.isArray(th?.codes)) rawCodes.push(...th.codes);
+    for (const c of rawCodes) {
+      if (typeof c === 'string') codeBlocks.push({ lang:'', code: clean(c) });
+      else codeBlocks.push({ lang: clean(c?.lang || c?.language || ''), code: clean(c?.code || c?.text || c?.value || '') });
+    }
+    const codeText = codeBlocks
+      .filter((x) => x.code)
+      .map((cb) => `\n\n\`\`\`${cb.lang || ''}\n${cb.code}\n\`\`\``)
+      .join('');
 
-    // Keep the dock signal verbatim-first (transparency)
-    if (signal) parts.push(signal);
+    const actions = Array.isArray(th?.actions)
+      ? th.actions.slice(0, 12).map((a, k) => ({
+          type: clean(a?.type || a?.key || ''),
+          label: clean(a?.label || a?.name || a?.step || a?.title || `Step ${k+1}`),
+          short: clean(a?.short || a?.summary || ''),
+          long: clean(a?.long || a?.detail || a?.verbose || '')
+        }))
+      : [];
 
-    // Deterministic "self-talk" (no flicker during streaming)
-    const seed = (title.length + signal.length + (subArr ? subArr.length : 0) + (histArr ? histArr.length : 0)) >>> 0;
-    const pick = (arr) => arr[(arr && arr.length ? seed % arr.length : 0)] || "";
-
-    const openersByType = {
-      search: [
-        "Okay… this reads like a search move. I’m trying to turn intent into something I can verify.",
-        "Alright, I’m in ‘source mode’ — I need receipts, not vibes.",
-        "Let me widen the net a bit, then tighten it back down with cross-checks."
-      ],
-      file: [
-        "Cool, this is a read/parse step. I need to pull the important text out cleanly.",
-        "I’m treating this like file intake — extract first, then interpret.",
-        "Alright, I’m scanning what was provided and turning it into usable context."
-      ],
-      calc: [
-        "Math brain on. I’m going to define the variables, then walk it forward carefully.",
-        "This part is about numbers behaving — I’m checking the arithmetic and the assumptions.",
-        "Okay, compute mode. Slow, deliberate, no sloppy jumps."
-      ],
-      code: [
-        "This looks like a build/patch moment. I’m isolating the failing edge before I touch anything.",
-        "Alright, code logic time — map the flow, then change one thing at a time.",
-        "I’m debugging the chain: what triggers what, and where it can silently fail."
-      ],
-      check: [
-        "Verification pass. I’m stress-testing the idea before I commit to it.",
-        "I’m sanity-checking: does this hold under edge cases, not just the happy path?",
-        "Audit mode: confirm the facts, confirm the behavior, then proceed."
-      ],
-      logic: [
-        "Reasoning pass. I’m connecting constraints into one clean path forward.",
-        "Let me line up the logic — what must be true, what can’t be true, and what follows.",
-        "Okay, I’m stitching the argument together so the next step lands cleanly."
-      ],
-      process: [
-        "I’m structuring the flow. First I stabilize the frame, then I build the steps.",
-        "Alright, I’m organizing the thought stream into something the system can act on.",
-        "I’m setting the stage: define the goal, define the constraints, then move."
-      ]
+    return {
+      id: clean(th?.id || `dock_${i}`) || `dock_${i}`,
+      sec: Number.isFinite(th?.sec) ? Math.max(0, Number(th.sec)) : null,
+      title,
+      description: (prose + codeText).trim(),
+      bodySegments: prose ? prose.split(/\n\n+/).map((text, idx) => ({ id:`seg_${i}_${idx}`, kind:'prose', text })) : [],
+      codeBlocks: codeBlocks.filter((x) => x.code),
+      actions
     };
-
-    const opener = pick(openersByType[primary] || openersByType.process);
-
-    // Conversational explanation layer (derived from the same signal — no invented facts)
-    const explainByType = {
-      search: [
-        "I’m basically asking: what sources do I trust, and what do they agree on?",
-        "I’ll keep an eye out for contradictions — if two sources clash, that’s the real clue.",
-        "Once I have enough signal, I’ll collapse it into a single, verifiable takeaway."
-      ],
-      file: [
-        "Step one is extraction. Step two is meaning. I’m not mixing those too early.",
-        "If the text is messy, I’ll clean it up into a stable summary without losing nuance.",
-        "Then I’ll map the important bits into the next decision."
-      ],
-      calc: [
-        "I’m going to keep units/assumptions explicit so the result doesn’t drift.",
-        "If anything is ambiguous, I’ll choose the safest interpretation and show the path.",
-        "Then I’ll carry the computed result into the next step like a constraint."
-      ],
-      code: [
-        "I’m treating this like surgery: locate, reproduce, fix, then verify.",
-        "I’ll keep the change small so it doesn’t ripple into unrelated behavior.",
-        "Then I’ll confirm the fix still respects your environment rules."
-      ],
-      check: [
-        "I’m checking whether the logic is internally consistent, not just ‘sounds right.’",
-        "If something can fail silently, I’m going to call that out explicitly.",
-        "Then I’ll greenlight the next step with confidence, not hope."
-      ],
-      logic: [
-        "I’m turning scattered points into one continuous argument you can follow end-to-end.",
-        "I’ll watch for hidden assumptions — those are usually the bug.",
-        "Then I’ll bridge into the next node with the minimum needed context."
-      ],
-      process: [
-        "I’m stabilizing the structure so each step naturally leads into the next.",
-        "I’ll keep the narrative progressive — what changed, why it matters, what happens next.",
-        "Then I’ll hand off to the next node with a clean baton pass."
-      ]
-    };
-
-    const explain = explainByType[primary] || explainByType.process;
-    parts.push("");
-    parts.push(`${opener}`);
-
-    // Progressive typing snapshots (so you can feel the thought forming)
-    if (histArr && histArr.length) {
-      const take = histArr.slice(Math.max(0, histArr.length - 6));
-      const prog = take
-        .map((p, i) => clean(p))
-        .filter(Boolean)
-        .map((p, i) => `(${i+1}) ${p}`)
-        .join("\n\n");
-      if (prog) {
-        parts.push("");
-        parts.push(`How this thought evolved:\n${prog}`);
-      }
-    }
-
-    // Verbose subthoughts (kept verbatim, just formatted)
-    if (subArr && subArr.length) {
-      const lines = subArr
-        .map(s => clean(s))
-        .filter(Boolean)
-        .map(s => `→ ${s}`)
-        .join("\n");
-      if (lines) {
-        parts.push("");
-        parts.push(`Under the hood:\n${lines}`);
-      }
-    }
-
-    // Bridge into next (keep the flow cinematic)
-    if (isLast) {
-      parts.push("");
-      parts.push("Final move:\nWhen you’re ready, glide to the end to complete the traverse.");
-    } else if (nextTitle && !/^continue\.?$/i.test(String(nextTitle).trim())) {
-      parts.push("");
-      parts.push(`Up next:
-${clean(nextTitle)}`);
-    }
-
-    return clipSoft(parts.join("\n"), 32000);
-  };
-
-  const buildActions = (t, narrative, nextTitle, isLast, actionsArr) => {
-    // If the dock already provides actions, map them cleanly.
-    if (actionsArr && actionsArr.length) {
-      return actionsArr.slice(0, 10).map((a, i) => {
-        const label = clean(a?.label ?? a?.name ?? a?.step ?? a?.title ?? `Step ${i+1}`) || `Step ${i+1}`;
-        const short = clean(a?.short ?? a?.summary ?? "");
-        const long  = clean(a?.long ?? a?.verbose ?? a?.detail ?? "");
-        const type  = clean(a?.type ?? "") || getPrimaryType(label, long || narrative);
-        return { type, label, short, long };
-      });
-    }
-
-    // Otherwise infer a compact pipeline (icons/orbs will match via type)
-    const primary = getPrimaryType(t, narrative);
-    const next = clean(nextTitle || "");
-    const out = [];
-
-    const push = (type, label, short, long) => out.push({ type, label, short, long });
-
-    if (primary === "search") {
-      push("search", "Build query", "Formulate search terms", "Translate intent into optimized search queries.");
-      push("search", "Fetch sources", "Retrieve live results", "Collect relevant sources and snippets for grounding.");
-      push("check",  "Cross‑reference", "Verify consistency", "Compare multiple sources to avoid contradictions.");
-      push("sync",   next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Package grounded context for the next node.");
-    } else if (primary === "file") {
-      push("file", "Scan input", "Identify attachments", "Locate and classify provided files and media.");
-      push("file", "Extract text", "Parse/OCR where needed", "Extract structured text and metadata from inputs.");
-      push("logic","Filter signal", "Remove noise", "Keep only the content that affects the next decision.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Inject extracted context into the next node.");
-    } else if (primary === "code") {
-      push("logic","Map structure", "Outline architecture", "Plan the patch path and avoid side effects.");
-      push("code", "Implement fix", "Write the change", "Apply the smallest change that resolves the failure.");
-      push("check","Review", "Validate behavior", "Check edge cases and regressions.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Ship the patch into the next phase.");
-    } else if (primary === "calc") {
-      push("calc","Compute", "Run the numbers", "Execute calculations with explicit steps.");
-      push("check","Sanity check", "Validate result", "Double‑check constraints and bounds.");
-      push("logic","Interpret", "Explain meaning", "Translate result into a decision or next action.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Carry the computed result forward.");
-    } else if (primary === "check") {
-      push("check","Verify", "Confirm assumptions", "Validate claims against available evidence.");
-      push("check","Test edge cases", "Look for failure modes", "Probe conditions that could break the plan.");
-      push("logic","Resolve", "Choose the safest route", "Pick the most robust option given constraints.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Lock verified state and proceed.");
-    } else if (primary === "logic") {
-      push("logic","Analyze", "Weigh tradeoffs", "Evaluate the most likely root causes and remedies.");
-      push("logic","Select path", "Commit to approach", "Choose the most stable approach that preserves UX.");
-      push("check","Validate", "Look for contradictions", "Ensure the plan doesn’t violate constraints.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Set the next node up with a clear state.");
-    } else {
-      push("process","Intake", "Read prompt", "Establish constraints and target outcome.");
-      push("logic","Synthesize", "Merge context", "Combine observations into a coherent model.");
-      push("check","Refine", "Tighten output", "Polish for clarity and accuracy.");
-      push("sync", next ? `Bridge → ${next}` : "Bridge forward", "Prepare next stage", "Commit the stream into the next node.");
-    }
-
-    if (isLast) out.push({ type:"sync", label:"Return to chat", short:"Complete traverse", long:"Close the Loom after the COMPLETE outro." });
-    return out.slice(0, 10);
   };
 
   const buildMilestones = (dock) => {
-    const thoughts = extractThoughts(dock);
-    if (!thoughts.length) return null;
-
-    const MAX = 80; // safety cap (prevents UI overload)
-    const base = thoughts.length > MAX ? thoughts.slice(-MAX) : thoughts;
-
+    const src = extractThoughts(resolveDock(dock));
+    if (!src.length) return null;
+    const base = src.slice(-120).map(normalizeThought).filter((m) => m.title || m.description || m.codeBlocks.length);
+    if (!base.length) return null;
     let secAcc = 0;
-    const milestones = base.map((th, i) => {
-      const title = th.t || `Thought ${i+1}`;
-      const next = (i < base.length - 1) ? (base[i+1].t || `Thought ${i+2}`) : "COMPLETE";
-      const isLast = (i === base.length - 1);
-
-      const narrative = buildNarrative(title, th.d, th.subArr, th.histArr, next, isLast);
-      const actions = buildActions(title, narrative, next, isLast, th.actionsArr);
-
-      const sec = (typeof th.sec === "number" && isFinite(th.sec)) ? Math.max(0, th.sec) : (secAcc + 10);
+    return base.map((m, i) => {
+      const sec = Number.isFinite(m.sec) ? m.sec : (secAcc + 8);
       secAcc = sec;
-
-      return { id: `dock_${i}`, sec, title, description: narrative, actions };
+      return { ...m, sec, title: m.title || `Thought ${i+1}` };
     });
-
-    return milestones;
   };
 
-  // Export builder for the transport layer to upgrade bucketized payloads.
-  window.__roaryBuildMilestonesV26 = (dock) => {
-    try{ return buildMilestones(dock); }catch(e){ return null; }
-  };
+  const observers = new WeakMap();
+  const timers = new WeakMap();
 
-  // ---- throttle sync ----
   const scheduleSync = (dock) => {
-    try{
-      dock = resolveDock(dock);
-      if (!dock) return;
-      if (dock.__roaryLoomSyncTimerV26) return;
-      dock.__roaryLoomSyncTimerV26 = setTimeout(() => {
-        dock.__roaryLoomSyncTimerV26 = null;
-        try{
-          const ms = buildMilestones(dock);
-          if (ms && typeof window.syncLoomData === "function") window.syncLoomData(ms);
-        }catch(e){}
-      }, 120);
-    }catch(e){}
+    const d = resolveDock(dock);
+    if (!d || timers.get(d)) return;
+    const t = setTimeout(() => {
+      timers.delete(d);
+      const ms = buildMilestones(d);
+      if (ms && typeof window.syncLoomData === 'function') window.syncLoomData(ms);
+    }, 120);
+    timers.set(d, t);
   };
 
-  // ---- observe dock typing & store progressive snapshots on the most recent thought ----
-  const installObservers = (dock) => {
-    try{
-      dock = resolveDock(dock);
-      if (!dock) return;
-      if (dock.__roaryLoomObsV26) return;
-      if (typeof MutationObserver === "undefined") return;
-
-      // Attempt to identify a root DOM node for this dock
-      const root = dock.el || dock.rootEl || dock.container || dock;
-      const rootEl = (root && root.querySelector) ? root : document.querySelector(".thought-dock-z") || document.querySelector(".thought-dock");
-
-      if (!rootEl) return;
-
-      const obs = new MutationObserver(() => {
-        try{
-          dock = resolveDock(dock);
-          window.__roaryDockLatest = dock;
-          scheduleSync(dock);
-        }catch(e){}
-      });
-
-      try{ obs.observe(rootEl, { childList:true, subtree:true, characterData:true }); }catch(e){}
-      dock.__roaryLoomObsV26 = obs;
-    }catch(e){}
+  const installObserver = (dock) => {
+    const d = resolveDock(dock);
+    if (!d || observers.has(d) || typeof MutationObserver === 'undefined') return;
+    const root = d.el || d.rootEl || d.container || d;
+    const rootEl = (root && root.querySelector) ? root : null;
+    if (!rootEl) return;
+    const obs = new MutationObserver(() => scheduleSync(d));
+    obs.observe(rootEl, { childList:true, subtree:true, characterData:true });
+    observers.set(d, obs);
   };
 
-  // ---- exported API ----
-  window.__roarySyncLoomFromDock = function(dock){
-    try{
-      dock = resolveDock(dock);
-      if (!dock || typeof window.syncLoomData !== "function") return;
-      window.__roaryDockLatest = dock;
-      installObservers(dock);
-      scheduleSync(dock);
-    }catch(e){}
+  window.__roaryBuildMilestonesV26 = (dock) => {
+    try { return buildMilestones(dock); } catch(_) { return null; }
   };
 
-  // Allow master to push latest state on open.
-  window.__roarySyncLoomNowV26 = () => {
-    try{
-      let dock = window.__roaryDockLatest || document.querySelector(".thought-dock-z") || document.querySelector(".thought-dock");
-      dock = resolveDock(dock);
-      if (!dock) return;
-      const ms = buildMilestones(dock);
-      if (ms && typeof window.syncLoomData === "function") window.syncLoomData(ms);
-    }catch(e){}
+  window.__roarySyncLoomFromDock = (dock) => {
+    const d = resolveDock(dock);
+    if (!d || typeof window.syncLoomData !== 'function') return;
+    window.__roaryDockLatest = d;
+    installObserver(d);
+    scheduleSync(d);
   };
 
-  // ---- hook Dock push function (sa) if present ----
+  window.__roarySyncLoomNowV26 = (dockHint) => {
+    const d = resolveDock(dockHint || window.__roaryActiveLoomDock || window.__roaryDockLatest);
+    if (!d || typeof window.syncLoomData !== 'function') return;
+    window.__roaryDockLatest = d;
+    const ms = buildMilestones(d);
+    if (ms) window.syncLoomData(ms);
+  };
+
   const wrapSA = () => {
-    try{
-      const orig = window.sa;
-      if (typeof orig !== "function" || orig.__roaryLoomWrappedV26) return;
-
-      const wrapped = function(dock, thought){
-        const r = orig.apply(this, arguments);
-        try{
-          dock = resolveDock(dock);
-          window.__roaryDockLatest = dock;
-          installObservers(dock);
-          scheduleSync(dock);
-        }catch(e){}
-        return r;
-      };
-      wrapped.__roaryLoomWrappedV26 = true;
-      window.sa = wrapped;
-      log("Hooked window.sa for Dock → Loom syncing.");
-    }catch(e){}
+    const orig = window.sa;
+    if (typeof orig !== 'function' || orig.__roaryLoomWrappedV26) return true;
+    const wrapped = function(dock){
+      const r = orig.apply(this, arguments);
+      try { window.__roarySyncLoomFromDock(dock); } catch(_){}
+      return r;
+    };
+    wrapped.__roaryLoomWrappedV26 = true;
+    window.sa = wrapped;
+    return true;
   };
 
-  wrapSA();
-  setTimeout(wrapSA, 400);
-  setTimeout(wrapSA, 1200);
-
-  log("Ready.");
+  if (!wrapSA()) {
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries += 1;
+      if (wrapSA() || tries > 30) clearInterval(iv);
+    }, 200);
+  }
 })();
 </script>
 
