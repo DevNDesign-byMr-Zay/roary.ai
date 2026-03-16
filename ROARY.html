@@ -558,8 +558,8 @@
 
 <style id="roary_zdock_only_layout_fix_v1">
 /* Hide the legacy/native v3 thought dock (the one that shows "Thought (5.1s) / Response Complete") */
-body.roary-zdock-active .msg-wrap.assistant .thought-dock,
-body.roary-zdock-active .msg-wrap.assistant .thought-dock.v3{
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock.v3{
   display: none !important;
 }
 
@@ -3408,6 +3408,147 @@ function setCenterImageBusy(on, label){
 
 <!-- ROARY UI REBUILD: Avatar, Z-Thoughts, OCR Fixes -->
 
+
+<style id="roary_zdock_guardrails_v2">
+/* Guardrail: never hide native thought dock unless this exact assistant wrap has a Z-dock. */
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock.v3{
+  display:none !important;
+}
+body.roary-zdock-active .msg-wrap.assistant:not(.roary-has-zdock) .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant:not(.roary-has-zdock) .thought-dock.v3{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+</style>
+<script id="roary_zdock_guardrails_js_v2">
+(() => {
+  if (window.__roaryZDockGuardrailsV2) return;
+  window.__roaryZDockGuardrailsV2 = true;
+
+  const sync = () => {
+    const wraps = document.querySelectorAll('.msg-wrap.assistant');
+    let anyZ = false;
+    wraps.forEach((wrap) => {
+      const hasZ = !!wrap.querySelector('.thought-dock-z');
+      if (hasZ) anyZ = true;
+      wrap.classList.toggle('roary-has-zdock', hasZ);
+    });
+    if (!anyZ && document.body) document.body.classList.remove('roary-zdock-active');
+  };
+
+  let t = null;
+  const schedule = () => {
+    if (t) return;
+    t = setTimeout(() => { t = null; sync(); }, 50);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      new MutationObserver(schedule).observe(document.body || document.documentElement, {
+        childList:true,
+        subtree:true,
+        attributes:true,
+        attributeFilter:['class','data-phase','data-complete']
+      });
+    } catch(_){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync, { once:true });
+  else sync();
+  window.addEventListener('load', sync, { once:true });
+})();
+</script>
+
+
+<script id="roary_zdock_fallback_bridge_v1">
+(() => {
+  if (window.__roaryZDockFallbackBridgeV1) return;
+  window.__roaryZDockFallbackBridgeV1 = true;
+
+  const clean = (v) => String(v ?? '').replace(/\s+/g,' ').trim();
+
+  const getNativeTitle = (native) => {
+    return clean(
+      native?.querySelector?.('.tt-title-cur')?.textContent ||
+      native?.querySelector?.('.tt-title')?.textContent ||
+      native?.querySelector?.('.thought-title')?.textContent ||
+      native?.getAttribute?.('data-title') || ''
+    );
+  };
+
+  const getNativeSub = (native) => {
+    return clean(
+      native?.querySelector?.('.tt-sub-cur')?.textContent ||
+      native?.querySelector?.('.tt-sub')?.textContent ||
+      native?.querySelector?.('.thought-desc')?.textContent ||
+      native?.getAttribute?.('data-sub') ||
+      native?.getAttribute?.('data-desc') || ''
+    );
+  };
+
+  const ensureZDock = (wrap) => {
+    if (!wrap || !wrap.querySelector) return;
+    let z = wrap.querySelector('.thought-dock-z');
+    const native = wrap.querySelector('.thought-dock.v3, .thought-dock');
+    if (!native) return;
+
+    const title = getNativeTitle(native) || 'Thinking';
+    const sub = getNativeSub(native);
+
+    if (!z) {
+      z = document.createElement('div');
+      z.className = 'thought-dock-z';
+      z.setAttribute('data-phase', native.getAttribute('data-phase') || '1');
+      z.innerHTML = '<div class="td-card" data-state="0"><div class="td-header"><div class="td-title"></div></div><div class="td-sub"></div></div>';
+      native.insertAdjacentElement('afterend', z);
+    }
+
+    const titleEl = z.querySelector('.td-title');
+    const subEl = z.querySelector('.td-sub');
+    if (titleEl) titleEl.textContent = title;
+    if (subEl) subEl.textContent = sub;
+
+    if (native.getAttribute('data-complete') === '1' || /response\s+complete|process\s+complete/i.test(clean(native.textContent || ''))) {
+      z.setAttribute('data-complete', '1');
+      z.setAttribute('data-phase', '2');
+      const card = z.querySelector('.td-card');
+      if (card) card.setAttribute('data-state', '2');
+    }
+
+    wrap.classList.add('roary-has-zdock');
+    if (document.body) document.body.classList.add('roary-zdock-active');
+    try { window.__roaryDockZ = z; } catch(_){ }
+  };
+
+  const syncAll = () => {
+    document.querySelectorAll('.msg-wrap.assistant').forEach(ensureZDock);
+  };
+
+  let t = null;
+  const schedule = () => {
+    if (t) return;
+    t = setTimeout(() => { t = null; syncAll(); }, 80);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      new MutationObserver(schedule).observe(document.body || document.documentElement, {
+        childList:true,
+        subtree:true,
+        characterData:true,
+        attributes:true,
+        attributeFilter:['class','data-phase','data-complete']
+      });
+    } catch(_){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncAll, { once:true });
+  else syncAll();
+  window.addEventListener('load', syncAll, { once:true });
+})();
+</script>
 
 <style id="roary_zdock_prelude_evap_v1">
 /* ===========================================================
@@ -11360,7 +11501,9 @@ const __roaryWheelHandler = (e) => {
     let card = (e && e.target && e.target.closest) ? e.target.closest('.thought-card') : null;
 
     // Fallback: some trackpads report wheel targets as <body>/<html>.
-    if (!card && hoveredCardEl) card = hoveredCardEl;
+    if (!card && hoveredCardEl && hoveredCardEl.isConnected) {
+      try{ if (hoveredCardEl.matches(':hover')) card = hoveredCardEl; }catch(_){ }
+    }
 
     if (!card) {
       const x = (typeof e?.clientX === 'number' && e.clientX !== 0) ? e.clientX : lastMouseX;
@@ -13152,10 +13295,26 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
 
     // [ROARY][Loom] Removed legacy duplicate card-rebuild block (v24 clean)
 
+    let __roaryLoomSeq = 0;
+    let __roaryLoomCompleteSignal = false;
+    let __roaryLoomSessionKey = '';
+
     window.addEventListener('message', (ev) => {
       const d = ev && ev.data;
-      if(!d || d.type !== 'roary:loomSync') return;
-      __roaryApplyDockSync(d.milestones || []);
+      if(!d) return;
+      if(d.type === 'roary:loomSync'){
+        const seq = Number(d.seq || 0);
+        if (seq && seq < __roaryLoomSeq) return;
+        if (seq) __roaryLoomSeq = seq;
+        __roaryLoomSessionKey = String(d.sessionKey || __roaryLoomSessionKey || '');
+        __roaryLoomCompleteSignal = !!d.completed;
+        __roaryApplyDockSync(d.milestones || []);
+      }
+      if(d.type === 'roary:loomComplete'){
+        if (!d.sessionKey || !__roaryLoomSessionKey || String(d.sessionKey) === String(__roaryLoomSessionKey)) {
+          __roaryLoomCompleteSignal = true;
+        }
+      }
     }, false);
 
     // Camera + node behavior
@@ -13374,7 +13533,7 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
       // Deterministic completion handoff
       const finalNode = nodes && nodes.length ? nodes[nodes.length - 1] : null;
       const onFinal = !!(finalNode && activeNode && activeNode.id === finalNode.id && cardCentered);
-      if (onFinal && !window.__roaryLoomExiting) {
+      if (onFinal && __roaryLoomCompleteSignal && !window.__roaryLoomExiting) {
           window.__roaryLoomExiting = true;
           const co = document.getElementById('complete-overlay');
           if (co) co.classList.add('active');
@@ -13384,7 +13543,7 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
                   if (co) co.classList.remove('active');
                   window.__roaryLoomExiting = false;
               }, 360);
-          }, 1100);
+          }, 760);
       }
 
       // Timeline clock (scroll-synced)
@@ -13635,13 +13794,15 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     }
   };
 
-  window.syncLoomData = (milestones) => {
+  window.syncLoomData = (milestones, meta = {}) => {
     const payload = {
       type: "roary:loomSync",
       milestones: Array.isArray(milestones) ? milestones.slice(0, 120) : [],
       sentAt: Date.now(),
       seq: ++seq,
-      v: "v26"
+      v: "v26",
+      sessionKey: String(meta.sessionKey || ""),
+      completed: !!meta.completed
     };
     try{
       if (!ensureFrameLoaded()) { queue.push(payload); return; }
@@ -13651,8 +13812,8 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     }catch(e){ try{ queue.push(payload); }catch(_){} }
   };
 
-  window.__roaryLoomCompleteV26 = () => {
-    const payload = { type: "roary:loomComplete", sentAt: Date.now(), v:"v26" };
+  window.__roaryLoomCompleteV26 = (meta = {}) => {
+    const payload = { type: "roary:loomComplete", sentAt: Date.now(), v:"v26", sessionKey: String(meta.sessionKey || "") };
     try{
       if (!ensureFrameLoaded()) { queue.push(payload); return; }
       const cw = getFrame()?.contentWindow;
@@ -13675,6 +13836,9 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+  const sessionMap = window.__roaryLoomSessionsV26 || (window.__roaryLoomSessionsV26 = new Map());
+  const dockKeyMap = window.__roaryLoomDockKeysV26 || (window.__roaryLoomDockKeysV26 = new WeakMap());
+
   const resolveDock = (dock) => {
     try {
       if (dock && (Array.isArray(dock.__roaryAllEntries) || Array.isArray(dock.allEntries) || Array.isArray(dock.thoughts))) return dock;
@@ -13688,6 +13852,18 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     }
   };
 
+  const getSessionKey = (dock) => {
+    if (!dock) return 'loom_unknown';
+    if (dockKeyMap.has(dock)) return dockKeyMap.get(dock);
+    const host = dock.closest ? dock.closest('.msg-wrap,[data-msg-id],[data-message-id],[data-response-id]') : null;
+    const domKey = clean((dock.dataset && (dock.dataset.responseId || dock.dataset.msgId || dock.dataset.messageId || dock.dataset.loomSessionId))
+      || (host && host.getAttribute && (host.getAttribute('data-response-id') || host.getAttribute('data-message-id') || host.getAttribute('data-msg-id')))
+      || dock.id || '');
+    const key = domKey || `loom_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+    dockKeyMap.set(dock, key);
+    return key;
+  };
+
   const extractThoughts = (dock) => {
     if (dock && Array.isArray(dock.thoughts) && dock.thoughts.length) return dock.thoughts;
     if (dock && Array.isArray(dock.__roaryAllEntries) && dock.__roaryAllEntries.length) return dock.__roaryAllEntries;
@@ -13695,26 +13871,51 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     return [];
   };
 
+  const parseSegments = (text, seed) => {
+    const src = String(text || '');
+    if (!src.trim()) return [];
+    const out = [];
+    const re = /```([^\n`]*)\n?([\s\S]*?)```/g;
+    let idx = 0, m, n = 0;
+    while ((m = re.exec(src))) {
+      const prose = clean(src.slice(idx, m.index));
+      if (prose) out.push({ id: `seg_${seed}_${n++}`, kind: 'prose', text: prose });
+      const code = String(m[2] || '').replace(/^\n+|\n+$/g, '');
+      if (clean(code)) out.push({ id: `seg_${seed}_${n++}`, kind: 'code', text: code, lang: clean(m[1] || '') });
+      idx = re.lastIndex;
+    }
+    const tail = clean(src.slice(idx));
+    if (tail) out.push({ id: `seg_${seed}_${n++}`, kind: 'prose', text: tail });
+    return out;
+  };
+
   const normalizeThought = (th, i) => {
     const title = clean(th?.t ?? th?.title ?? th?.name ?? `Thought ${i+1}`);
-    const desc = clean(th?.d ?? th?.desc ?? th?.description ?? th?.sub ?? '');
+    const desc0 = clean(th?.d ?? th?.desc ?? th?.description ?? '');
+
     const subs = Array.isArray(th?.sub) ? th.sub : Array.isArray(th?.subthoughts) ? th.subthoughts : Array.isArray(th?.steps) ? th.steps : [];
     const hist = Array.isArray(th?.subHistory) ? th.subHistory : [];
-    const prose = [desc, ...subs.map(clean), ...hist.map(clean)].filter(Boolean).join('\n\n');
+    const textParts = [desc0, ...subs.map(clean), ...hist.map(clean)].filter(Boolean);
+    const textJoined = textParts.join('\n\n');
 
     const codeBlocks = [];
     const rawCodes = [];
     if (Array.isArray(th?.codeBlocks)) rawCodes.push(...th.codeBlocks);
     if (Array.isArray(th?.codes)) rawCodes.push(...th.codes);
     for (const c of rawCodes) {
-      if (typeof c === 'string') codeBlocks.push({ lang:'', code: clean(c) });
-      else codeBlocks.push({ lang: clean(c?.lang || c?.language || ''), code: clean(c?.code || c?.text || c?.value || '') });
+      if (typeof c === 'string') {
+        const cc = String(c || '').replace(/^\n+|\n+$/g, '');
+        if (clean(cc)) codeBlocks.push({ lang:'', code: cc });
+      } else {
+        const lang = clean(c?.lang || c?.language || '');
+        const code = String(c?.code || c?.text || c?.value || '').replace(/^\n+|\n+$/g, '');
+        if (clean(code)) codeBlocks.push({ lang, code });
+      }
     }
-    const codeText = codeBlocks
-      .filter((x) => x.code)
-      .map((cb) => `\n\n\`\`\`${cb.lang || ''}\n${cb.code}\n\`\`\``)
-      .join('');
 
+    const segments = parseSegments(textJoined, i);
+    const codeFenceText = codeBlocks.map((cb)=>`\n\n\`\`\`${cb.lang || ''}\n${cb.code}\n\`\`\``).join('');
+    const desc = clean(textJoined + codeFenceText);
     const actions = Array.isArray(th?.actions)
       ? th.actions.slice(0, 12).map((a, k) => ({
           type: clean(a?.type || a?.key || ''),
@@ -13728,17 +13929,28 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
       id: clean(th?.id || `dock_${i}`) || `dock_${i}`,
       sec: Number.isFinite(th?.sec) ? Math.max(0, Number(th.sec)) : null,
       title,
-      description: (prose + codeText).trim(),
-      bodySegments: prose ? prose.split(/\n\n+/).map((text, idx) => ({ id:`seg_${i}_${idx}`, kind:'prose', text })) : [],
-      codeBlocks: codeBlocks.filter((x) => x.code),
-      actions
+      description: desc,
+      bodySegments: segments,
+      codeBlocks,
+      actions,
+      completionState: !!(th?.complete || th?.done || th?.final || th?.isFinal || th?.completed)
     };
+  };
+
+  const isDockComplete = (dock, milestones) => {
+    try {
+      const dset = dock && dock.dataset;
+      if (dset && /^(1|true|yes|done|complete|completed)$/i.test(String(dset.complete || dset.completed || dset.done || dset.streamComplete || ''))) return true;
+      if (dock && (dock.complete === true || dock.completed === true || dock.done === true || dock.streamComplete === true)) return true;
+      if (Array.isArray(milestones) && milestones.length && milestones[milestones.length - 1].completionState) return true;
+    } catch(_) {}
+    return false;
   };
 
   const buildMilestones = (dock) => {
     const src = extractThoughts(resolveDock(dock));
     if (!src.length) return null;
-    const base = src.slice(-120).map(normalizeThought).filter((m) => m.title || m.description || m.codeBlocks.length);
+    const base = src.slice(-120).map(normalizeThought).filter((m) => m.title || m.description || m.codeBlocks.length || (m.bodySegments && m.bodySegments.length));
     if (!base.length) return null;
     let secAcc = 0;
     return base.map((m, i) => {
@@ -13751,14 +13963,26 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
   const observers = new WeakMap();
   const timers = new WeakMap();
 
+  const pushLoom = (dock, milestones, completed) => {
+    if (!Array.isArray(milestones) || !milestones.length || typeof window.syncLoomData !== 'function') return;
+    const key = getSessionKey(dock);
+    const prev = sessionMap.get(key);
+    if (prev && prev.sealed && !(window.__roaryActiveLoomDock && window.__roaryActiveLoomDock === dock)) return;
+    const snap = milestones.map((m) => ({ ...m }));
+    sessionMap.set(key, { key, sealed: !!completed, completed: !!completed, milestones: snap, updatedAt: Date.now() });
+    window.syncLoomData(snap, { sessionKey: key, completed: !!completed });
+    if (completed && typeof window.__roaryLoomCompleteV26 === 'function') window.__roaryLoomCompleteV26({ sessionKey: key });
+  };
+
   const scheduleSync = (dock) => {
     const d = resolveDock(dock);
     if (!d || timers.get(d)) return;
     const t = setTimeout(() => {
       timers.delete(d);
       const ms = buildMilestones(d);
-      if (ms && typeof window.syncLoomData === 'function') window.syncLoomData(ms);
-    }, 120);
+      if (!ms) return;
+      pushLoom(d, ms, isDockComplete(d, ms));
+    }, 90);
     timers.set(d, t);
   };
 
@@ -13789,8 +14013,16 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     const d = resolveDock(dockHint || window.__roaryActiveLoomDock || window.__roaryDockLatest);
     if (!d || typeof window.syncLoomData !== 'function') return;
     window.__roaryDockLatest = d;
+    const key = getSessionKey(d);
+    const cached = sessionMap.get(key);
+    if (cached && Array.isArray(cached.milestones) && cached.milestones.length) {
+      window.syncLoomData(cached.milestones, { sessionKey: key, completed: !!cached.completed });
+      if (cached.completed && typeof window.__roaryLoomCompleteV26 === 'function') window.__roaryLoomCompleteV26({ sessionKey: key });
+      return;
+    }
     const ms = buildMilestones(d);
-    if (ms) window.syncLoomData(ms);
+    if (!ms) return;
+    pushLoom(d, ms, isDockComplete(d, ms));
   };
 
   const wrapSA = () => {
@@ -13798,7 +14030,7 @@ const stamp = node.cardTimeEl || node.cardEl.querySelector('.card-time');
     if (typeof orig !== 'function' || orig.__roaryLoomWrappedV26) return true;
     const wrapped = function(dock){
       const r = orig.apply(this, arguments);
-      try { window.__roarySyncLoomFromDock(dock); } catch(_){}
+      try { window.__roarySyncLoomFromDock(dock); } catch(_){ }
       return r;
     };
     wrapped.__roaryLoomWrappedV26 = true;
