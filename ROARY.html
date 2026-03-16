@@ -3461,6 +3461,95 @@ body.roary-zdock-active .msg-wrap.assistant:not(.roary-has-zdock) .thought-dock.
 })();
 </script>
 
+
+<script id="roary_zdock_fallback_bridge_v1">
+(() => {
+  if (window.__roaryZDockFallbackBridgeV1) return;
+  window.__roaryZDockFallbackBridgeV1 = true;
+
+  const clean = (v) => String(v ?? '').replace(/\s+/g,' ').trim();
+
+  const getNativeTitle = (native) => {
+    return clean(
+      native?.querySelector?.('.tt-title-cur')?.textContent ||
+      native?.querySelector?.('.tt-title')?.textContent ||
+      native?.querySelector?.('.thought-title')?.textContent ||
+      native?.getAttribute?.('data-title') || ''
+    );
+  };
+
+  const getNativeSub = (native) => {
+    return clean(
+      native?.querySelector?.('.tt-sub-cur')?.textContent ||
+      native?.querySelector?.('.tt-sub')?.textContent ||
+      native?.querySelector?.('.thought-desc')?.textContent ||
+      native?.getAttribute?.('data-sub') ||
+      native?.getAttribute?.('data-desc') || ''
+    );
+  };
+
+  const ensureZDock = (wrap) => {
+    if (!wrap || !wrap.querySelector) return;
+    let z = wrap.querySelector('.thought-dock-z');
+    const native = wrap.querySelector('.thought-dock.v3, .thought-dock');
+    if (!native) return;
+
+    const title = getNativeTitle(native) || 'Thinking';
+    const sub = getNativeSub(native);
+
+    if (!z) {
+      z = document.createElement('div');
+      z.className = 'thought-dock-z';
+      z.setAttribute('data-phase', native.getAttribute('data-phase') || '1');
+      z.innerHTML = '<div class="td-card" data-state="0"><div class="td-header"><div class="td-title"></div></div><div class="td-sub"></div></div>';
+      native.insertAdjacentElement('afterend', z);
+    }
+
+    const titleEl = z.querySelector('.td-title');
+    const subEl = z.querySelector('.td-sub');
+    if (titleEl) titleEl.textContent = title;
+    if (subEl) subEl.textContent = sub;
+
+    if (native.getAttribute('data-complete') === '1' || /response\s+complete|process\s+complete/i.test(clean(native.textContent || ''))) {
+      z.setAttribute('data-complete', '1');
+      z.setAttribute('data-phase', '2');
+      const card = z.querySelector('.td-card');
+      if (card) card.setAttribute('data-state', '2');
+    }
+
+    wrap.classList.add('roary-has-zdock');
+    if (document.body) document.body.classList.add('roary-zdock-active');
+    try { window.__roaryDockZ = z; } catch(_){ }
+  };
+
+  const syncAll = () => {
+    document.querySelectorAll('.msg-wrap.assistant').forEach(ensureZDock);
+  };
+
+  let t = null;
+  const schedule = () => {
+    if (t) return;
+    t = setTimeout(() => { t = null; syncAll(); }, 80);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      new MutationObserver(schedule).observe(document.body || document.documentElement, {
+        childList:true,
+        subtree:true,
+        characterData:true,
+        attributes:true,
+        attributeFilter:['class','data-phase','data-complete']
+      });
+    } catch(_){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncAll, { once:true });
+  else syncAll();
+  window.addEventListener('load', syncAll, { once:true });
+})();
+</script>
+
 <style id="roary_zdock_prelude_evap_v1">
 /* ===========================================================
    Z-DOCK PRELUDE: evaporating transitions between processing states
