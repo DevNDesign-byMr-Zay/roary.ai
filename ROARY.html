@@ -558,8 +558,8 @@
 
 <style id="roary_zdock_only_layout_fix_v1">
 /* Hide the legacy/native v3 thought dock (the one that shows "Thought (5.1s) / Response Complete") */
-body.roary-zdock-active .msg-wrap.assistant .thought-dock,
-body.roary-zdock-active .msg-wrap.assistant .thought-dock.v3{
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock.v3{
   display: none !important;
 }
 
@@ -3408,6 +3408,58 @@ function setCenterImageBusy(on, label){
 
 <!-- ROARY UI REBUILD: Avatar, Z-Thoughts, OCR Fixes -->
 
+
+<style id="roary_zdock_guardrails_v2">
+/* Guardrail: never hide native thought dock unless this exact assistant wrap has a Z-dock. */
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant.roary-has-zdock .thought-dock.v3{
+  display:none !important;
+}
+body.roary-zdock-active .msg-wrap.assistant:not(.roary-has-zdock) .thought-dock,
+body.roary-zdock-active .msg-wrap.assistant:not(.roary-has-zdock) .thought-dock.v3{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+</style>
+<script id="roary_zdock_guardrails_js_v2">
+(() => {
+  if (window.__roaryZDockGuardrailsV2) return;
+  window.__roaryZDockGuardrailsV2 = true;
+
+  const sync = () => {
+    const wraps = document.querySelectorAll('.msg-wrap.assistant');
+    let anyZ = false;
+    wraps.forEach((wrap) => {
+      const hasZ = !!wrap.querySelector('.thought-dock-z');
+      if (hasZ) anyZ = true;
+      wrap.classList.toggle('roary-has-zdock', hasZ);
+    });
+    if (!anyZ && document.body) document.body.classList.remove('roary-zdock-active');
+  };
+
+  let t = null;
+  const schedule = () => {
+    if (t) return;
+    t = setTimeout(() => { t = null; sync(); }, 50);
+  };
+
+  if (typeof MutationObserver !== 'undefined') {
+    try {
+      new MutationObserver(schedule).observe(document.body || document.documentElement, {
+        childList:true,
+        subtree:true,
+        attributes:true,
+        attributeFilter:['class','data-phase','data-complete']
+      });
+    } catch(_){}
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', sync, { once:true });
+  else sync();
+  window.addEventListener('load', sync, { once:true });
+})();
+</script>
 
 <style id="roary_zdock_prelude_evap_v1">
 /* ===========================================================
